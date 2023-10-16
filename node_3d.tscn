@@ -1,0 +1,59 @@
+[gd_scene load_steps=9 format=3 uid="uid://fo7y3q7r4ob5"]
+
+[ext_resource type="Script" path="res://node_3d.gd" id="1_fop46"]
+[ext_resource type="Texture2D" uid="uid://cxditrfyna5oj" path="res://texture/blockmesh texture darkgray.png" id="3_w3002"]
+[ext_resource type="Script" path="res://addons/csg_deform/csg_deform.gd" id="3_x6w55"]
+
+[sub_resource type="QuadMesh" id="QuadMesh_7djwu"]
+size = Vector2(2, 2)
+subdivide_width = 5
+subdivide_depth = 5
+orientation = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mjjs3"]
+albedo_texture = ExtResource("3_w3002")
+uv1_triplanar = true
+uv1_triplanar_sharpness = 10.1965
+texture_filter = 5
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_ktdha"]
+sky_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+ground_horizon_color = Color(0.64625, 0.65575, 0.67075, 1)
+
+[sub_resource type="Sky" id="Sky_gpifh"]
+sky_material = SubResource("ProceduralSkyMaterial_ktdha")
+
+[sub_resource type="Environment" id="Environment_uspmv"]
+background_mode = 2
+sky = SubResource("Sky_gpifh")
+tonemap_mode = 2
+glow_enabled = true
+
+[node name="Node3D" type="Node3D"]
+script = ExtResource("1_fop46")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.863102, -0.472599, 0.17806, -0.0710964, 0.462764, 0.883626, -0.5, 0.75, -0.433013, 0, 0, 0)
+directional_shadow_max_distance = 20.0
+
+[node name="CSGDeform3D" type="CSGMesh3D" parent="."]
+script = ExtResource("3_x6w55")
+lattice = Array[Vector3]([Vector3(-0.00496066, 0.0753231, -0.020861), Vector3(-0.0315075, 0.122823, -0.024214), Vector3(-0.00781301, 0.0234912, -0.00436504), Vector3(0.000674493, 0.00818235, -0.0013128), Vector3(0.0226719, 0.128399, -0.0222513), Vector3(-0.00497134, 0.0755038, -0.0209037), Vector3(-0.0313582, 0.12269, -0.0242228), Vector3(-0.00786686, 0.0237442, -0.00441461), Vector3(0.000690198, 0.00836704, -0.00134147), Vector3(0.0226815, 0.128452, -0.0222602), Vector3(-0.000788941, 0.00892779, -0.00140304), Vector3(-0.121004, 0.279204, -0.0629498), Vector3(0.000453372, 0.00130059, -0.000321902), Vector3(0.0228484, 0.0688848, -0.00663046), Vector3(0.00191243, 0.0136581, 0.000434502), Vector3(-0.000805036, 0.00911333, -0.00143337), Vector3(-0.120224, 0.277855, -0.0626467), Vector3(0.00047236, 0.00135518, -0.000335417), Vector3(0.0228109, 0.0687718, -0.00661962), Vector3(0.00195019, 0.0139391, 0.000441169), Vector3(-0.00532293, 0.0563007, -0.00660286), Vector3(-0.042061, 0.42493, -0.0442165), Vector3(0.00711625, 0.0283005, -0.00637235), Vector3(0.0124353, 0.186619, -0.0152955), Vector3(0.00115331, 0.0561308, 0.00381558), Vector3(-0.00538698, 0.0567841, -0.00664986), Vector3(-0.0418964, 0.424736, -0.0441532), Vector3(0.00724882, 0.0288347, -0.00648968), Vector3(0.012456, 0.186934, -0.0153216), Vector3(0.00119191, 0.0567148, 0.00386027), Vector3(0.000156068, 0.0436292, -0.00750984), Vector3(0.00345614, 0.0249864, -0.00162006), Vector3(0.0106563, 0.15619, 0.000263909), Vector3(-0.000383438, 0.0938693, -0.000246518), Vector3(-0.00174446, 0.0205538, -0.000752873), Vector3(0.000125543, 0.0441247, -0.00757345), Vector3(0.00350002, 0.0254484, -0.00165301), Vector3(0.010709, 0.156505, 0.000266169), Vector3(-0.000386409, 0.0938474, -0.000255713), Vector3(-0.00174092, 0.020887, -0.000748393), Vector3(0.00569766, 0.26153, -0.0815596), Vector3(-0.00394976, 0.0935505, -0.0133707), Vector3(-0.0127419, 0.129476, -0.0164328), Vector3(-0.00339065, 0.143758, -0.0268934), Vector3(0.0220867, 0.18909, 0.00841506), Vector3(0.00562165, 0.261436, -0.0814177), Vector3(-0.00403674, 0.094303, -0.0134326), Vector3(-0.0128184, 0.130073, -0.0164548), Vector3(-0.00337632, 0.14435, -0.0268233), Vector3(0.0220518, 0.188656, 0.00841756)])
+lattice_res = Vector3i(5, 2, 5)
+fix_normals = false
+
+[node name="CSGGeo3D" type="CSGMesh3D" parent="CSGDeform3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.00346345, 0)
+mesh = SubResource("QuadMesh_7djwu")
+material = SubResource("StandardMaterial3D_mjjs3")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_uspmv")
+
+[node name="CameraHolder" type="Node3D" parent="."]
+transform = Transform3D(0.579228, -0.40558, 0.707107, 0.573576, 0.819151, 0, -0.579228, 0.40558, 0.707107, 0, 0, 0)
+
+[node name="Camera3D" type="Camera3D" parent="CameraHolder"]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 3, 0, 0)
+
+[node name="GridMap" type="GridMap" parent="."]
