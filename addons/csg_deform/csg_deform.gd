@@ -181,22 +181,46 @@ func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : f
             var original_arrays := original_mesh.surface_get_arrays(closest_id)
             var original_verts = original_arrays[ArrayMesh.ARRAY_VERTEX]
             lattice_get_weights(original_verts[closest_i], 1.0, hit_lattice_weights, hit_lattice_counts)
-            
+        
         max_weight = 1.0
     
-    
     var res := lattice_res
+    
+    var avg_deform = Vector3()
+    var avg_deform_weight = 0.0
     for coord in hit_lattice_weights:
-        var weight : float = hit_lattice_weights[coord] / hit_lattice_counts[coord] * max_weight
+        hit_lattice_weights[coord] *= max_weight
+        var weight = hit_lattice_weights[coord]
+        avg_deform_weight += weight
+        var index : int = coord.z*res.x*res.y + coord.y*res.x + coord.x
+        avg_deform += lattice[index] * weight
+    
+    avg_deform /= avg_deform_weight
+    
+    for coord in hit_lattice_weights:
+        var weight : float = hit_lattice_weights[coord] / hit_lattice_counts[coord] 
         var index : int = coord.z*res.x*res.y + coord.y*res.x + coord.x
         if mode == "Grow":
             lattice[index] += normal * weight * delta
         elif mode == "Erase":
-            var erased = lattice[index] * pow(0.5, abs(delta) * weight * 10.0)
+            #var erased = lattice[index] * pow(0.5, abs(delta) * weight * 10.0)
+            var erased = lattice[index].lerp(Vector3(), 1.0 - pow(0.5, abs(delta) * weight * 10.0))
             if delta > 0.0:
                 lattice[index] = erased
             else:
                 lattice[index] = lerp(lattice[index], erased, -1.0)
+        elif mode == "Smooth" or mode == "Relax" or mode == "Average":
+            var smoothed = lattice[index].lerp(avg_deform, 1.0 - pow(0.5, abs(delta) * weight * 10.0))
+            var diff = smoothed - lattice[index]
+            if mode == "Smooth":
+                diff = diff.project(normal)
+            elif mode == "Relax":
+                diff = diff.slide(normal)
+            if delta > 0.0:
+                lattice[index] += diff
+            else:
+                lattice[index] -= diff
+            
     
     dirty = true
 
@@ -296,8 +320,6 @@ func _process(delta : float) -> void:
         randomize_lattice()
     
     if dirty:
-        var time_a = Time.get_ticks_usec()
-        
         dirty = false
         var new_surfaces = []
         var seen_coords = {} # meshes contain duplicated verts on smooth surfaces, so we cache them
@@ -323,28 +345,18 @@ func _process(delta : float) -> void:
                     seen_coords[key] = i
             new_surfaces.push_back([type, arrays, blend, mat])
         
-        var time_b = Time.get_ticks_usec()
-        
         mesh.clear_surfaces()
         for info in new_surfaces:
             mesh.add_surface_from_arrays(info[0], info[1], info[2])
             mesh.surface_set_material(mesh.get_surface_count()-1, info[3])
         
-        var time_c = Time.get_ticks_usec()
-        
         collision = mesh.create_trimesh_shape()
         PhysicsServer3D.body_clear_shapes(dummy_body)
         PhysicsServer3D.body_add_shape(dummy_body, collision.get_rid())
         
-        var time_d = Time.get_ticks_usec()
-        
         # force broadphase update
         PhysicsServer3D.body_set_space(dummy_body, get_tree().root.find_world_3d().space)
         PhysicsServer3D.body_set_space(dummy_body, dummy_space)
-        
-        var time_e = Time.get_ticks_usec()
-        
-        print("mesh update time a: ", (time_b - time_a)/1000000.0)
     
     force_update_transform()
     var state := PhysicsServer3D.body_get_direct_state(dummy_body)

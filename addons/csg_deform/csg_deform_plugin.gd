@@ -40,7 +40,7 @@ class CSGDeformControls extends VBoxContainer:
         strength = EditorSpinSlider.new()
         strength.rounded = false
         strength.step = 0.05
-        strength.label = "Radius"
+        strength.label = "Strength"
         strength.min_value = 0.05
         strength.max_value = 20.0
         strength.value = 1.0
@@ -53,7 +53,7 @@ class CSGDeformControls extends VBoxContainer:
         mode.add_item("Smooth")
         mode.add_item("Relax")
         mode.add_item("Average")
-        mode.add_item("Drag")
+        #mode.add_item("Drag") # TODO
         add_child(mode)
         
         direction = OptionButton.new()
@@ -61,6 +61,10 @@ class CSGDeformControls extends VBoxContainer:
         direction.add_item("Towards Camera")
         direction.add_item("Up")
         direction.add_item("Down")
+        direction.add_item("X+")
+        direction.add_item("X-")
+        direction.add_item("Z+")
+        direction.add_item("Z-")
         add_child(direction)
     
 var main_screen : Node = null
@@ -158,15 +162,20 @@ func _process(delta : float) -> void:
                 normal = Vector3.UP
             elif dir_name == "Down":
                 normal = Vector3.DOWN
+            elif dir_name == "X+":
+                normal = Vector3(1, 0, 0)
+            elif dir_name == "X-":
+                normal = Vector3(-1, 0, 0)
+            elif dir_name == "Z+":
+                normal = Vector3(0, 0, 1)
+            elif dir_name == "Z-":
+                normal = Vector3(0, 0, -1)
             
             var strength = controls.strength.value * delta
             if input_m1 and !Input.is_key_pressed(KEY_SHIFT):
-                var start = Time.get_ticks_usec()
-                edit_node.affect_lattice(input_position, radius, input_normal,  strength, mode_name)
-                var end = Time.get_ticks_usec()
-                print("deform time: ", (end-start)/1000000.0)
+                edit_node.affect_lattice(input_position, radius, normal,  strength, mode_name)
             elif input_m2 or input_m1:
-                edit_node.affect_lattice(input_position, radius, input_normal, -strength, mode_name)
+                edit_node.affect_lattice(input_position, radius, normal, -strength, mode_name)
         else:
             RenderingServer.instance_set_visible(mesh_inst, false)
     else:
