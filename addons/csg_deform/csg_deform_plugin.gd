@@ -13,13 +13,34 @@ var input_normal = null
 var input_m1 = false
 var input_m2 = false
 
-class CSGDeformControls extends VBoxContainer:
+class CSGDeformControls extends HBoxContainer:
     var radius : Range = null
     var strength : Range = null
     var mode : OptionButton = null
     var direction : OptionButton = null
     var local_normal : CheckButton = null
-    func _ready():
+    var panel : PopupPanel = null
+    var menu_button : Button = null
+    
+    func button_toggled(button_pressed : bool) -> void:
+        if button_pressed:
+            var r := menu_button.get_global_rect()
+            r.position.y += r.size.y
+            r.size.x = 0
+            panel.popup_on_parent(r)
+        else:
+            panel.hide()
+    
+    func _init():
+        menu_button = Button.new()
+        menu_button.action_mode = Button.ACTION_MODE_BUTTON_PRESS
+        menu_button.flat = true
+        menu_button.toggle_mode = true
+        menu_button.text = "Deform Options"
+        menu_button.toggled.connect(self.button_toggled)
+        
+        var list := VBoxContainer.new()
+        
         anchor_left = 0
         anchor_right = 0
         anchor_top = 0
@@ -28,26 +49,6 @@ class CSGDeformControls extends VBoxContainer:
         offset_top = 48
         name = "CSGDeformControls"
         
-        radius = EditorSpinSlider.new()
-        radius.rounded = false
-        radius.step = 0.01
-        radius.label = "Radius"
-        radius.min_value = 0.01
-        radius.max_value = 64.0
-        radius.value = 0.25
-        radius.exp_edit = true
-        add_child(radius)
-        
-        strength = EditorSpinSlider.new()
-        strength.rounded = false
-        strength.step = 0.05
-        strength.label = "Strength"
-        strength.min_value = 0.05
-        strength.max_value = 20.0
-        strength.value = 1.0
-        strength.exp_edit = true
-        add_child(strength)
-        
         mode = OptionButton.new()
         mode.add_item("Grow")
         mode.add_item("Erase")
@@ -55,22 +56,58 @@ class CSGDeformControls extends VBoxContainer:
         mode.add_item("Relax")
         mode.add_item("Average")
         #mode.add_item("Drag") # TODO
+        mode.flat = true
         add_child(mode)
         
+        radius = EditorSpinSlider.new()
+        radius.rounded = false
+        radius.step = 0.01
+        radius.min_value = 0.01
+        radius.max_value = 8.0
+        radius.value = 0.25
+        radius.exp_edit = true
+        #radius.flat = true
+        radius.custom_minimum_size.x = 104
+        radius.label = "Radius"
+        add_child(radius)
+        
+        strength = EditorSpinSlider.new()
+        strength.rounded = false
+        strength.step = 0.05
+        strength.min_value = 0.05
+        strength.max_value = 20.0
+        strength.value = 1.0
+        strength.exp_edit = true
+        #strength.flat = true
+        strength.custom_minimum_size.x = 104
+        strength.label = "Strength"
+        add_child(strength)
+        
+        var label := Label.new()
+        label.text = "Direction:"
+        list.add_child(label)
+        
         direction = OptionButton.new()
-        direction.add_item("Towards Normal")
-        direction.add_item("Towards Camera")
+        direction.add_item("Face")
+        direction.add_item("Camera")
         direction.add_item("Up")
         direction.add_item("Down")
         direction.add_item("X+")
         direction.add_item("X-")
         direction.add_item("Z+")
         direction.add_item("Z-")
-        add_child(direction)
+        direction.flat = true
+        list.add_child(direction)
         
         local_normal = CheckButton.new()
-        local_normal.text = "Local Normal"
-        add_child(local_normal)
+        local_normal.text = "Apply locally"
+        list.add_child(local_normal)
+        
+        panel = PopupPanel.new()
+        panel.add_child(list)
+        add_child(panel)
+        add_child(menu_button)
+        
     
 var main_screen : Node = null
 var viewport_container : Node = null
@@ -78,13 +115,15 @@ var controls : CSGDeformControls = null
 
 func set_up_controls():
     controls = CSGDeformControls.new()
-    main_screen = get_editor_interface().get_editor_main_screen()
-    viewport_container = main_screen.get_child(1).get_child(1).get_child(0).get_child(0).get_child(0)
-    viewport_container.get_child(0).add_child(controls)
+    #main_screen = get_editor_interface().get_editor_main_screen()
+    #viewport_container = main_screen.get_child(1).get_child(1).get_child(0).get_child(0).get_child(0)
+    #viewport_container.get_child(0).add_child(controls)
+    add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, controls)
 
 func clean_up_controls():
-    main_screen = null
-    viewport_container = null
+    #main_screen = null
+    #viewport_container = null
+    remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, controls)
     controls.queue_free()
 
 func _enter_tree():
@@ -179,7 +218,7 @@ func _process(delta : float) -> void:
             
             position = edit_node.global_transform.affine_inverse() * position
             
-            if !controls.local_normal.button_pressed or dir_name == "Towards Camera" or dir_name == "Towards Normal":
+            if !controls.local_normal.button_pressed or dir_name == "Camera" or dir_name == "Face":
                 normal = (edit_node.global_transform.affine_inverse() * normal).normalized()
             
             var strength = controls.strength.value * delta

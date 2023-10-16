@@ -135,10 +135,22 @@ func build_lattice():
     for i in lattice.size():
         lattice[i] = Vector3()
 
+var start_lattice : PackedVector3Array
+func begin_operation():
+    start_lattice = lattice.duplicate()
+
+func end_operation():
+    start_lattice.resize(0)
+
 func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : float, mode : String):
     var mesh : ArrayMesh = get_meshes()[1]
     var hit_lattice_weights := {}
     var hit_lattice_counts := {}
+    
+    var closest_id = -1
+    var closest_i = -1
+    var closest_dist = 10000000000.0
+    
     for id in mesh.get_surface_count():
         var arrays := mesh.surface_get_arrays(id)
         var verts = arrays[ArrayMesh.ARRAY_VERTEX]
@@ -149,7 +161,12 @@ func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : f
         for i in verts.size():
             var vert := verts[i] as Vector3
             var diff := (vert - where) / radius
-            var l := 1.0 - diff.length_squared()
+            var dist := diff.length_squared()
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_id = id
+                closest_i = i
+            var l := 1.0 - dist
             l = max(0, l)
             l *= l
             if l > 0.0:
@@ -163,20 +180,6 @@ func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : f
     if max_weight > 0.0:
         max_weight = 1.0 / min(max_weight, 1.0)
     else:
-        var closest_id = -1
-        var closest_i = -1
-        var closest_dist = 10000000000.0
-        for id in mesh.get_surface_count():
-            var arrays := mesh.surface_get_arrays(id)
-            var verts = arrays[ArrayMesh.ARRAY_VERTEX]
-            for i in verts.size():
-                var vert := verts[i] as Vector3
-                var diff := (vert - where) / radius
-                var dist = diff.length_squared()
-                if dist < closest_dist:
-                    closest_dist = dist
-                    closest_id = id
-                    closest_i = i
         if closest_i >= 0:
             var original_arrays := original_mesh.surface_get_arrays(closest_id)
             var original_verts = original_arrays[ArrayMesh.ARRAY_VERTEX]
@@ -222,38 +225,9 @@ func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : f
                 lattice[index] += diff
             else:
                 lattice[index] -= diff
-            
     
     dirty = true
 
-#func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : float, add : float, multiply : float):
-#    var res := lattice_res
-#    where = (where/lattice_size + Vector3(0.5, 0.5, 0.5)) * Vector3(res)
-#    var radius_vec3 = Vector3.ONE * radius
-#    radius_vec3 = radius_vec3/lattice_size * Vector3(res)
-#
-#    var start = where - radius_vec3
-#    var end = where + radius_vec3
-#
-#    print(radius_vec3)
-#
-#    var a := Vector3i(start.floor()).clamp(Vector3i(), res-Vector3i.ONE)
-#    var b := Vector3i(end.floor() + Vector3.ONE).clamp(Vector3i(), res-Vector3i.ONE)
-#
-#    for z in range(a.z, b.z):
-#        for y in range(a.y, b.y):
-#            for x in range(a.x, b.x):
-#                var pos = Vector3(x, y, z)
-#                var diff = (pos - where) / radius_vec3
-#                var l = 1.0 - diff.length_squared()
-#                l = max(0, l)
-#                l *= l
-#
-#                var index = z*res.x*res.y + y*res.x + x
-#                lattice[index] += normal * l * delta * add
-#                lattice[index] *= pow(multiply, delta)
-#    dirty = true
-#
 
 var dummy_space : RID = PhysicsServer3D.space_create()
 var dummy_body : RID = PhysicsServer3D.body_create()
