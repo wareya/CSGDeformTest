@@ -141,7 +141,7 @@ func quantize_lattice():
     # round lattice to prevent runaway precision loss in the undo/redo system
     # this might technically not be enough, but it should be good enough for now
     for i in lattice.size():
-        lattice[i] = (lattice[i]*8192.0).round()/8192.0
+        lattice[i] = (lattice[i]*10000.0).round()/10000.0
 
 var start_lattice : PackedVector3Array
 func begin_operation():
