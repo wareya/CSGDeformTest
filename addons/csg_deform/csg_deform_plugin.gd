@@ -19,6 +19,7 @@ class CSGDeformControls extends HBoxContainer:
     var mode : OptionButton = null
     var direction : OptionButton = null
     var local_normal : CheckButton = null
+    var edit_enabled : CheckButton = null
     var panel : PopupPanel = null
     var menu_button : Button = null
     
@@ -38,6 +39,11 @@ class CSGDeformControls extends HBoxContainer:
         menu_button.toggle_mode = true
         menu_button.text = "Deform Options"
         menu_button.toggled.connect(self.button_toggled)
+        
+        edit_enabled = CheckButton.new()
+        edit_enabled.text = "Do Deform"
+        edit_enabled.button_pressed = true
+        add_child(edit_enabled)
         
         var list := VBoxContainer.new()
         
@@ -100,7 +106,7 @@ class CSGDeformControls extends HBoxContainer:
         list.add_child(direction)
         
         local_normal = CheckButton.new()
-        local_normal.text = "Apply locally"
+        local_normal.text = "Apply Locally"
         list.add_child(local_normal)
         
         panel = PopupPanel.new()
@@ -134,7 +140,7 @@ func _enter_tree():
     mesh = make_radius_mesh()
     mesh_inst = RenderingServer.instance_create2(mesh.get_rid(), get_tree().root.find_world_3d().scenario)
     
-    gridmesh = make_grid_mesh(Vector3i(16, 16, 16))
+    gridmesh = make_grid_mesh(Vector3i(16, 16, 16)) # placeholder grid size, will be replaced in process
     gridmesh_inst = RenderingServer.instance_create2(gridmesh.get_rid(), get_tree().root.find_world_3d().scenario)
     
     add_custom_type("CSGDeform3D", "CSGShape3D", preload("res://addons/csg_deform/csg_deform.gd"), preload("res://addons/csg_deform/icon.png"))
@@ -149,7 +155,10 @@ func _exit_tree():
 
 var camera : Camera3D = null
 var mouse_pos := Vector2()
+var have_affected_lattice := false
 func _forward_3d_gui_input(viewport_camera : Camera3D, event : InputEvent) -> int:
+    if !controls.edit_enabled.button_pressed:
+        return EditorPlugin.AFTER_GUI_INPUT_PASS
     camera = viewport_camera
     if edit_node:
         if event is InputEventMouseMotion:
@@ -162,19 +171,21 @@ func _forward_3d_gui_input(viewport_camera : Camera3D, event : InputEvent) -> in
             if event.button_index == MOUSE_BUTTON_RIGHT:
                 input_m2 = event.pressed
             if event.pressed:
-                print("starting")
                 edit_node.begin_operation()
+                have_affected_lattice = false
             else:
-                print("finishing")
                 var diff := edit_node.get_lattice_diff()
-                var uncompressed := diff.to_byte_array()
-                var compressed := uncompressed.compress(FileAccess.COMPRESSION_GZIP)
-                var undo_redo := get_undo_redo()
-                undo_redo.create_action("CSGDeform Lattice Edit")
-                undo_redo.add_do_method(edit_node, "add_compressed_lattice", compressed, 1.0)
-                undo_redo.add_undo_method(edit_node, "add_compressed_lattice", compressed, -1.0)
-                undo_redo.commit_action(false)
+                if have_affected_lattice:
+                    var uncompressed := var_to_bytes(diff)
+                    var compressed := uncompressed.compress(FileAccess.COMPRESSION_GZIP)
+                    var undo_redo := get_undo_redo()
+                    undo_redo.create_action("CSGDeform Lattice Edit")
+                    undo_redo.add_do_method(edit_node, "add_compressed_lattice", compressed, 1.0)
+                    undo_redo.add_undo_method(edit_node, "add_compressed_lattice", compressed, -1.0)
+                    undo_redo.commit_action(false)
+                
                 edit_node.end_operation()
+                have_affected_lattice = false
             
             return EditorPlugin.AFTER_GUI_INPUT_STOP
     else:
@@ -196,7 +207,7 @@ func _process(delta : float) -> void:
     if gridmesh_inst and edit_node:
         if gridmesh_size != edit_node.lattice_res:
             var mesh := ArrayMesh.new()
-            var arrays := make_grid_verts(edit_node.lattice_res)
+            var arrays := make_grid_arrays(edit_node.lattice_res)
             var mat := gridmesh.surface_get_material(0)
             gridmesh.clear_surfaces()
             gridmesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
@@ -216,7 +227,7 @@ func _process(delta : float) -> void:
             var dir_name = controls.direction.get_item_text(controls.direction.selected)
             var position = input_position
             var normal = input_normal
-            if dir_name == "Towards Camera":
+            if dir_name == "Camera":
                 normal = (camera.global_transform * Vector3.FORWARD).normalized()
             elif dir_name == "Up":
                 normal = Vector3.UP
@@ -234,13 +245,15 @@ func _process(delta : float) -> void:
             position = edit_node.global_transform.affine_inverse() * position
             
             if !controls.local_normal.button_pressed or dir_name == "Camera" or dir_name == "Face":
-                normal = (edit_node.global_transform.affine_inverse() * normal).normalized()
+                normal = (edit_node.global_transform.basis.inverse() * normal).normalized()
             
             var strength = controls.strength.value * delta
             if input_m1 and !Input.is_key_pressed(KEY_SHIFT):
                 edit_node.affect_lattice(position, radius, normal,  strength, mode_name)
+                have_affected_lattice = true
             elif input_m2 or input_m1:
                 edit_node.affect_lattice(position, radius, normal, -strength, mode_name)
+                have_affected_lattice = true
         else:
             RenderingServer.instance_set_visible(mesh_inst, false)
     else:
@@ -284,9 +297,10 @@ func make_radius_mesh() -> Mesh:
     mesh.material = mat
     return mesh
 
-func make_grid_verts(subdivs : Vector3i) -> Array:
+func make_grid_arrays(subdivs : Vector3i) -> Array:
     gridmesh_size = subdivs
     subdivs -= Vector3i.ONE
+    
     var m := Vector3(subdivs).clamp(Vector3(), Vector3.ONE)
     var verts := PackedVector3Array()
     for _info in [Vector3i(0, 1, 2), Vector3i(1, 2, 0), Vector3i(2, 0, 1)]:
@@ -323,7 +337,7 @@ func make_grid_mesh(subdivs : Vector3i) -> Mesh:
     mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     mat.albedo_color = Color(0.5, 0.75, 1.0, 0.1)
     var mesh := ArrayMesh.new()
-    var arrays := make_grid_verts(subdivs)
+    var arrays := make_grid_arrays(subdivs)
     mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
     mesh.surface_set_material(0, mat)
     return mesh

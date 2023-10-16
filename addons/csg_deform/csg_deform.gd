@@ -62,7 +62,7 @@ func lattice_get_smooth(coord : Vector3) -> Vector3:
     var cf := coord.floor()
     var a := Vector3i(cf).clamp(Vector3i(), resm1)
     var b := Vector3i(cf + Vector3.ONE).clamp(Vector3i(), resm1)
-    var t := (coord - Vector3(a)).clamp(Vector3(), Vector3.ONE)
+    var t := (coord - cf).clamp(Vector3(), Vector3.ONE)
 
     return lattice_get_i_interp_3d(a, b, t)
 
@@ -72,7 +72,7 @@ func lattice_get_weights(coord : Vector3, amount : float, weights : Dictionary, 
     var cf := coord.floor()
     var a := Vector3i(cf).clamp(Vector3i(), resm1)
     var b := Vector3i(cf + Vector3.ONE).clamp(Vector3i(), resm1)
-    var t := (coord - Vector3(a)).clamp(Vector3(), Vector3.ONE)
+    var t := (coord - cf).clamp(Vector3(), Vector3.ONE)
     
     for z in range(a.z, b.z+1):
         # t.z=0.0 : a -> 1.0, b -> 0.0
@@ -136,33 +136,33 @@ func build_lattice():
         lattice[i] = Vector3()
 
 # for undo/redo
-var start_lattice : PackedVector3Array
-func begin_operation():
-    start_lattice = lattice.duplicate()
-func end_operation():
-    start_lattice.resize(0)
-    # round lattice to around 0.0001 to prevent runaway precision loss in the undo/redo system
+
+func quantize_lattice():
+    # round lattice to prevent runaway precision loss in the undo/redo system
     # this might technically not be enough, but it should be good enough for now
     for i in lattice.size():
         lattice[i] = (lattice[i]*8192.0).round()/8192.0
 
+var start_lattice : PackedVector3Array
+func begin_operation():
+    quantize_lattice()
+    start_lattice = lattice.duplicate()
+func end_operation():
+    start_lattice.resize(0)
+
 func get_lattice_diff() -> PackedVector3Array:
+    quantize_lattice()
     var ret = start_lattice.duplicate()
     for i in ret.size():
         ret[i] = lattice[i] - ret[i]
     return ret
 
 func add_compressed_lattice(compressed : PackedByteArray, sign : float):
-    print("a")
     var res := lattice_res
     var decompressed = compressed.decompress_dynamic(-1, FileAccess.COMPRESSION_GZIP)
-    print("b")
-    for i in decompressed.size()/12:
-        var x := decompressed.decode_float(i*12)
-        var y := decompressed.decode_float(i*12+4)
-        var z := decompressed.decode_float(i*12+8)
-        lattice[i] += Vector3(x, y, z) * sign
-    print("c")
+    var diff := bytes_to_var(decompressed) as PackedVector3Array
+    for i in diff.size():
+        lattice[i] += diff[i] * sign
 
 func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : float, mode : String):
     var mesh : ArrayMesh = get_meshes()[1]
