@@ -161,6 +161,21 @@ func _forward_3d_gui_input(viewport_camera : Camera3D, event : InputEvent) -> in
                 input_m1 = event.pressed
             if event.button_index == MOUSE_BUTTON_RIGHT:
                 input_m2 = event.pressed
+            if event.pressed:
+                print("starting")
+                edit_node.begin_operation()
+            else:
+                print("finishing")
+                var diff := edit_node.get_lattice_diff()
+                var uncompressed := diff.to_byte_array()
+                var compressed := uncompressed.compress(FileAccess.COMPRESSION_GZIP)
+                var undo_redo := get_undo_redo()
+                undo_redo.create_action("CSGDeform Lattice Edit")
+                undo_redo.add_do_method(edit_node, "add_compressed_lattice", compressed, 1.0)
+                undo_redo.add_undo_method(edit_node, "add_compressed_lattice", compressed, -1.0)
+                undo_redo.commit_action(false)
+                edit_node.end_operation()
+            
             return EditorPlugin.AFTER_GUI_INPUT_STOP
     else:
         input_position = null
