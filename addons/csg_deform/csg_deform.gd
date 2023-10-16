@@ -190,12 +190,14 @@ func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : f
     var avg_deform_weight = 0.0
     for coord in hit_lattice_weights:
         hit_lattice_weights[coord] *= max_weight
-        var weight = hit_lattice_weights[coord]
-        avg_deform_weight += weight
-        var index : int = coord.z*res.x*res.y + coord.y*res.x + coord.x
-        avg_deform += lattice[index] * weight
+        if mode == "Smooth" or mode == "Relax" or mode == "Average":
+            var weight = hit_lattice_weights[coord]
+            avg_deform_weight += weight
+            var index : int = coord.z*res.x*res.y + coord.y*res.x + coord.x
+            avg_deform += lattice[index] * weight
     
-    avg_deform /= avg_deform_weight
+    if avg_deform_weight > 0.0:
+        avg_deform /= avg_deform_weight
     
     for coord in hit_lattice_weights:
         var weight : float = hit_lattice_weights[coord] / hit_lattice_counts[coord] 
@@ -276,10 +278,10 @@ func translate_coord(coord : Vector3, force_fast := false) -> Vector3:
 func get_normal_at_coord(c : Vector3, n : Vector3) -> Vector3:
     var y := n.cross(Vector3(n.y, n.z, -n.x))
     var x := n.cross(y)
-    var s := lattice_size/Vector3(lattice_res)/4.0 * (0.2 if smooth else 1.0)
+    var s := lattice_size/Vector3(lattice_res)/2.0# * (0.5 if smooth else 1.0)
     var s2 := s * 2.0
-    var tan := (translate_coord(c + x * s, true) - translate_coord(c - x * s, true)) / s2
-    var bitan := (translate_coord(c + y * s, true) - translate_coord(c - y * s, true)) / s2
+    var tan := (translate_coord(c + x * s, true) - translate_coord(c - x * s, true))
+    var bitan := (translate_coord(c + y * s, true) - translate_coord(c - y * s, true))
     return -tan.cross(bitan).normalized()
 
 func _validate_property():
