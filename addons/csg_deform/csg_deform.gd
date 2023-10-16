@@ -3,7 +3,10 @@
 extends CSGShape3D
 class_name CSGDeform3D
 
-@export var lattice : Array[Vector3] = [] :
+# TODO:
+# - support changing the lattice resolution without throwing out the lattice
+
+@export var lattice := PackedVector3Array() :
     set(value):
         lattice = value
         dirty = true
@@ -25,16 +28,6 @@ class_name CSGDeform3D
         smooth = value
         dirty = true
 
-func lattice_get(coord : Vector3) -> Vector3:
-    var resm1 := lattice_res-Vector3i.ONE
-    coord = (coord/lattice_size + Vector3(0.5, 0.5, 0.5)) * Vector3(resm1)
-    var cf := coord.floor()
-    var a := Vector3i(cf).clamp(Vector3i(), resm1)
-    var b := Vector3i(cf + Vector3.ONE).clamp(Vector3i(), resm1)
-    var t := (coord - Vector3(a)).clamp(Vector3(), Vector3.ONE)
-
-    return lattice_get_i_interp_3d(a, b, t)
-
 func lattice_get_fast(coord : Vector3) -> Vector3:
     var res := lattice_res
     var resm1 := lattice_res-Vector3i.ONE
@@ -42,7 +35,7 @@ func lattice_get_fast(coord : Vector3) -> Vector3:
     var cf := coord.floor()
     var a := Vector3i(cf).clamp(Vector3i(), resm1) * Vector3i(1, res.x, res.x*res.y)
     var b := Vector3i(cf + Vector3.ONE).clamp(Vector3i(), resm1) * Vector3i(1, res.x, res.x*res.y)
-    var t := (coord - Vector3(a)).clamp(Vector3(), Vector3.ONE)
+    var t := (coord - cf).clamp(Vector3(), Vector3.ONE)
     
     var aaa = lattice[a.z + a.y + a.x]
     var baa = lattice[a.z + a.y + b.x]
@@ -62,6 +55,16 @@ func lattice_get_fast(coord : Vector3) -> Vector3:
     var __b = _ab.lerp(_bb, t.y)
 
     return __a.lerp(__b, t.z)
+
+func lattice_get_smooth(coord : Vector3) -> Vector3:
+    var resm1 := lattice_res-Vector3i.ONE
+    coord = (coord/lattice_size + Vector3(0.5, 0.5, 0.5)) * Vector3(resm1)
+    var cf := coord.floor()
+    var a := Vector3i(cf).clamp(Vector3i(), resm1)
+    var b := Vector3i(cf + Vector3.ONE).clamp(Vector3i(), resm1)
+    var t := (coord - Vector3(a)).clamp(Vector3(), Vector3.ONE)
+
+    return lattice_get_i_interp_3d(a, b, t)
 
 func lattice_get_weights(coord : Vector3, amount : float, weights : Dictionary, counts : Dictionary):
     var resm1 := lattice_res-Vector3i.ONE
@@ -84,56 +87,47 @@ func lattice_get_weights(coord : Vector3, amount : float, weights : Dictionary, 
                 if not vec in weights:
                     weights[vec] = 0.0
                     counts[vec] = 0
-                weights[vec] = max(weights[vec], w * amount)
-                counts[vec] = 1
-                #weights[vec] += w * amount
-                #counts[vec] += 1
+                #weights[vec] = max(weights[vec], w * amount)
+                #counts[vec] = 1
+                weights[vec] += w * amount
+                counts[vec] += 1
 
 func lattice_get_i_interp_1d(c1 : Vector3i, c2 : Vector3i, t : float) -> Vector3:
     var res := lattice_res
     var a := lattice[c1.z*res.x*res.y + c1.y*res.x + c1.x]
     var b := lattice[c2.z*res.x*res.y + c2.y*res.x + c2.x]
-    if smooth:
-        var d = c2-c1
-        var c0 = (c1 - d).clamp(Vector3i(), res-Vector3i.ONE)
-        var c3 = (c2 + d).clamp(Vector3i(), res-Vector3i.ONE)
-        var pre  := lattice[c0.z*res.x*res.y + c0.y*res.x + c0.x]
-        var post := lattice[c3.z*res.x*res.y + c3.y*res.x + c3.x]
-        return a.cubic_interpolate(b, pre, post, t)
-    else:
-        return a.lerp(b, t)
+    var d = c2-c1
+    var c0 = (c1 - d).clamp(Vector3i(), res-Vector3i.ONE)
+    var c3 = (c2 + d).clamp(Vector3i(), res-Vector3i.ONE)
+    var pre  := lattice[c0.z*res.x*res.y + c0.y*res.x + c0.x]
+    var post := lattice[c3.z*res.x*res.y + c3.y*res.x + c3.x]
+    return a.cubic_interpolate(b, pre, post, t)
 
 func lattice_get_i_interp_2d(c1 : Vector3i, c2 : Vector3i, tx : float, ty : float) -> Vector3:
     var res := lattice_res
     var dy := (c2-c1) * Vector3i(0, 1, 0)
     var a := lattice_get_i_interp_1d(c1, c2 - dy, tx)
     var b := lattice_get_i_interp_1d(c1 + dy, c2, tx)
-    if smooth:
-        var c0_a = (c1 - dy  ).clamp(Vector3i(), res-Vector3i.ONE)
-        var c0_b = (c2 - dy*2).clamp(Vector3i(), res-Vector3i.ONE)
-        var c1_a = (c1 + dy*2).clamp(Vector3i(), res-Vector3i.ONE)
-        var c1_b = (c2 + dy  ).clamp(Vector3i(), res-Vector3i.ONE)
-        var pre  := lattice_get_i_interp_1d(c0_a, c0_b, tx)
-        var post := lattice_get_i_interp_1d(c1_a, c1_b, tx)
-        return a.cubic_interpolate(b, pre, post, ty)
-    else:
-        return a.lerp(b, ty)
+    var c0_a = (c1 - dy     ).clamp(Vector3i(), res-Vector3i.ONE)
+    var c0_b = (c2 - dy - dy).clamp(Vector3i(), res-Vector3i.ONE)
+    var c1_a = (c1 + dy + dy).clamp(Vector3i(), res-Vector3i.ONE)
+    var c1_b = (c2 + dy     ).clamp(Vector3i(), res-Vector3i.ONE)
+    var pre  := lattice_get_i_interp_1d(c0_a, c0_b, tx)
+    var post := lattice_get_i_interp_1d(c1_a, c1_b, tx)
+    return a.cubic_interpolate(b, pre, post, ty)
 
 func lattice_get_i_interp_3d(c1 : Vector3i, c2 : Vector3i, tv : Vector3) -> Vector3:
     var res := lattice_res
     var dz := (c2-c1) * Vector3i(0, 0, 1)
     var a := lattice_get_i_interp_2d(c1, c2 - dz, tv.x, tv.y)
     var b := lattice_get_i_interp_2d(c1 + dz, c2, tv.x, tv.y)
-    if smooth:
-        var c0_a = (c1 - dz  ).clamp(Vector3i(), res-Vector3i.ONE)
-        var c0_b = (c2 - dz*2).clamp(Vector3i(), res-Vector3i.ONE)
-        var c1_a = (c1 + dz*2).clamp(Vector3i(), res-Vector3i.ONE)
-        var c1_b = (c2 + dz  ).clamp(Vector3i(), res-Vector3i.ONE)
-        var pre  := lattice_get_i_interp_2d(c0_a, c0_b, tv.x, tv.y)
-        var post := lattice_get_i_interp_2d(c1_a, c1_b, tv.x, tv.y)
-        return a.cubic_interpolate(b, pre, post, tv.z)
-    else:
-        return a.lerp(b, tv.z)
+    var c0_a = (c1 - dz     ).clamp(Vector3i(), res-Vector3i.ONE)
+    var c0_b = (c2 - dz - dz).clamp(Vector3i(), res-Vector3i.ONE)
+    var c1_a = (c1 + dz + dz).clamp(Vector3i(), res-Vector3i.ONE)
+    var c1_b = (c2 + dz     ).clamp(Vector3i(), res-Vector3i.ONE)
+    var pre  := lattice_get_i_interp_2d(c0_a, c0_b, tv.x, tv.y)
+    var post := lattice_get_i_interp_2d(c1_a, c1_b, tv.x, tv.y)
+    return a.cubic_interpolate(b, pre, post, tv.z)
 
 func build_lattice():
     lattice = []
@@ -141,7 +135,7 @@ func build_lattice():
     for i in lattice.size():
         lattice[i] = Vector3()
 
-func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : float, add : float, multiply : float):
+func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : float, mode : String):
     var mesh : ArrayMesh = get_meshes()[1]
     var hit_lattice_weights := {}
     var hit_lattice_counts := {}
@@ -195,8 +189,14 @@ func affect_lattice(where : Vector3, radius : float, normal : Vector3, delta : f
     for coord in hit_lattice_weights:
         var weight : float = hit_lattice_weights[coord] / hit_lattice_counts[coord] * max_weight
         var index : int = coord.z*res.x*res.y + coord.y*res.x + coord.x
-        lattice[index] += normal * weight * delta * add
-        lattice[index] *= pow(multiply, delta * weight * 10.0)
+        if mode == "Grow":
+            lattice[index] += normal * weight * delta
+        elif mode == "Erase":
+            var erased = lattice[index] * pow(0.5, abs(delta) * weight * 10.0)
+            if delta > 0.0:
+                lattice[index] = erased
+            else:
+                lattice[index] = lerp(lattice[index], erased, -1.0)
     
     dirty = true
 
@@ -245,7 +245,7 @@ func _notification(what: int) -> void:
 
 func translate_coord(coord : Vector3, force_fast := false) -> Vector3:
     if smooth and !force_fast:
-        return coord + lattice_get(coord)
+        return coord + lattice_get_smooth(coord)
     else:
         return coord + lattice_get_fast(coord)
 
@@ -296,24 +296,31 @@ func _process(delta : float) -> void:
         randomize_lattice()
     
     if dirty:
-        print("it's dirty!")
         var time_a = Time.get_ticks_usec()
         
         dirty = false
         var new_surfaces = []
+        var seen_coords = {} # meshes contain duplicated verts on smooth surfaces, so we cache them
         for id in original_mesh.get_surface_count():
             var type := original_mesh.surface_get_primitive_type(id)
             var arrays := original_mesh.surface_get_arrays(id)
             var blend := original_mesh.surface_get_blend_shape_arrays(id)
             var mat := original_mesh.surface_get_material(id)
-            var verts = arrays[ArrayMesh.ARRAY_VERTEX]
-            var normals = arrays[ArrayMesh.ARRAY_NORMAL]
+            var verts : PackedVector3Array = arrays[ArrayMesh.ARRAY_VERTEX]
+            var normals : PackedVector3Array = arrays[ArrayMesh.ARRAY_NORMAL]
             for i in verts.size():
-                var old_vert = verts[i]
-                var new_vert := translate_coord(verts[i])
-                if fix_normals:
-                    normals[i] = get_normal_at_coord(old_vert, normals[i])
-                verts[i] = new_vert
+                var old_vert := verts[i]
+                var old_normal := normals[i]
+                var key = [old_vert, old_normal]
+                if key in seen_coords:
+                    normals[i] = normals[seen_coords[key]]
+                    verts[i] = verts[seen_coords[key]]
+                else:
+                    var new_vert := translate_coord(verts[i])
+                    if fix_normals:
+                        normals[i] = get_normal_at_coord(old_vert, normals[i])
+                    verts[i] = new_vert
+                    seen_coords[key] = i
             new_surfaces.push_back([type, arrays, blend, mat])
         
         var time_b = Time.get_ticks_usec()
@@ -338,9 +345,6 @@ func _process(delta : float) -> void:
         var time_e = Time.get_ticks_usec()
         
         print("mesh update time a: ", (time_b - time_a)/1000000.0)
-        print("mesh update time b: ", (time_c - time_b)/1000000.0)
-        print("mesh update time c: ", (time_d - time_c)/1000000.0)
-        print("mesh update time d: ", (time_e - time_e)/1000000.0)
     
     force_update_transform()
     var state := PhysicsServer3D.body_get_direct_state(dummy_body)
