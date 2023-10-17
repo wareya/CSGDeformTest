@@ -1,6 +1,6 @@
 # CSGDeformTest
 
-Test project for a CSG deforming node/tool for Godot 4.
+Test project for a CSG deforming node/tool for Godot 4. Made as a proof of concept for a proposal: https://github.com/godotengine/godot-proposals/issues/8149
 
 The addon under the addons folder implements a node extending from CSGShape3D that modifies its own mesh according to a displacement lattice. There's also an editor plugin for editing this displacement lattice, with a workflow similar to sculpting tools.
 
